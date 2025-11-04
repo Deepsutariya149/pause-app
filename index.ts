@@ -1,3 +1,4 @@
+import './src/utils/styled-components-setup';
 import { registerRootComponent } from 'expo';
 
 import App from './App';
