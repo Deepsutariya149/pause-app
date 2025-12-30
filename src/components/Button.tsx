@@ -1,7 +1,7 @@
 import React from 'react';
-import styled from 'styled-components/native';
-import { colors, spacing, borderRadius } from '../theme';
-import { ActivityIndicator } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { useTheme } from '../theme/theme-context';
+import { spacing, borderRadius } from '../theme';
 
 interface ButtonProps {
   title: string;
@@ -12,36 +12,6 @@ interface ButtonProps {
   size?: 'small' | 'medium' | 'large';
 }
 
-const StyledButton = styled.TouchableOpacity<{ variant: string; disabled: boolean; size: string }>`
-  background-color: ${(props) => {
-    if (props.disabled) return colors.gray[300];
-    if (props.variant === 'primary') return colors.primary;
-    if (props.variant === 'secondary') return colors.secondary;
-    return 'transparent';
-  }};
-  border: ${(props) =>
-    props.variant === 'outline' ? `2px solid ${colors.primary}` : 'none'};
-  padding: ${(props) => {
-    if (props.size === 'small') return `${spacing.sm}px ${spacing.md}px`;
-    if (props.size === 'large') return `${spacing.md}px ${spacing.xl}px`;
-    return `${spacing.md}px ${spacing.lg}px`;
-  }};
-  border-radius: ${borderRadius.md}px;
-  align-items: center;
-  justify-content: center;
-  min-height: 48px;
-`;
-
-const ButtonText = styled.Text<{ variant: string; disabled: boolean }>`
-  color: ${(props) => {
-    if (props.disabled) return colors.gray[500];
-    if (props.variant === 'outline') return colors.primary;
-    return colors.white;
-  }};
-  font-size: 16px;
-  font-weight: 600;
-`;
-
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
@@ -50,23 +20,63 @@ export const Button: React.FC<ButtonProps> = ({
   variant = 'primary',
   size = 'medium',
 }) => {
+  const { colors } = useTheme();
+
+  const getButtonStyle = () => {
+    const baseStyle: any = {
+      borderRadius: borderRadius.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 48,
+    };
+
+    // Size
+    if (size === 'small') {
+      baseStyle.paddingVertical = spacing.sm;
+      baseStyle.paddingHorizontal = spacing.md;
+    } else if (size === 'large') {
+      baseStyle.paddingVertical = spacing.md;
+      baseStyle.paddingHorizontal = spacing.xl;
+    } else {
+      baseStyle.paddingVertical = spacing.md;
+      baseStyle.paddingHorizontal = spacing.lg;
+    }
+
+    // Variant
+    if (disabled) {
+      baseStyle.backgroundColor = colors.gray[300];
+    } else if (variant === 'primary') {
+      baseStyle.backgroundColor = colors.primary;
+    } else if (variant === 'secondary') {
+      baseStyle.backgroundColor = colors.secondary;
+    } else if (variant === 'outline') {
+      baseStyle.backgroundColor = 'transparent';
+      baseStyle.borderWidth = 2;
+      baseStyle.borderColor = colors.primary;
+    }
+
+    return baseStyle;
+  };
+
+  const getTextColor = () => {
+    if (disabled) return colors.gray[500];
+    if (variant === 'outline') return colors.primary;
+    return colors.white;
+  };
+
   return (
-    <StyledButton
+    <TouchableOpacity
       onPress={onPress}
       disabled={disabled || loading}
-      variant={variant}
-      size={size}
+      style={getButtonStyle()}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'outline' ? colors.primary : colors.white} />
+        <ActivityIndicator color={getTextColor()} />
       ) : (
-        <ButtonText variant={variant} disabled={disabled}>
+        <Text style={{ color: getTextColor(), fontSize: 16, fontWeight: '600' }}>
           {title}
-        </ButtonText>
+        </Text>
       )}
-    </StyledButton>
+    </TouchableOpacity>
   );
 };
-
-
-

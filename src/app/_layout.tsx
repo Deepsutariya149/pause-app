@@ -6,15 +6,15 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { storage } from '../utils/storage';
 import { authService } from '../services/auth.service';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme/colors';
+import { ThemeProvider, useTheme } from '../theme/theme-context';
 import OnboardingScreen from './(auth)/onboarding';
 import LoginScreen from './(auth)/login';
 import SignupScreen from './(auth)/signup';
 import ForgotPasswordScreen from './(auth)/forgot-password';
 import HomeScreen from './(tabs)/home';
-import JournalScreen from './(tabs)/journal';
 import MoodScreen from './(tabs)/mood';
 import ExercisesScreen from './(tabs)/exercises';
+import GoalsScreen from './(tabs)/goals';
 import ProfileScreen from './(tabs)/profile';
 
 const Stack = createStackNavigator();
@@ -30,6 +30,8 @@ const queryClient = new QueryClient({
 });
 
 function TabsNavigator() {
+  const { colors } = useTheme();
+  
   return (
     <Tab.Navigator
       screenOptions={{
@@ -37,6 +39,8 @@ function TabsNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.gray[500],
         tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.gray[200],
           paddingBottom: 8,
           paddingTop: 8,
           height: 64,
@@ -49,15 +53,6 @@ function TabsNavigator() {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Journal"
-        component={JournalScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book" size={size} color={color} />
           ),
         }}
       />
@@ -76,6 +71,15 @@ function TabsNavigator() {
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="fitness" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Goals"
+        component={GoalsScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="flag" size={size} color={color} />
           ),
         }}
       />
@@ -128,20 +132,22 @@ export default function RootLayout() {
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <NavigationContainer>
-        <Stack.Navigator 
-          initialRouteName={initialRouteName}
-          screenOptions={{ headerShown: false }}
-        >
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Signup" component={SignupScreen} />
-          <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-          <Stack.Screen name="Tabs" component={TabsNavigator} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <NavigationContainer>
+          <Stack.Navigator 
+            initialRouteName={initialRouteName}
+            screenOptions={{ headerShown: false }}
+          >
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="Tabs" component={TabsNavigator} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }
 

@@ -13,7 +13,8 @@
     "build:production": "eas build --profile production",
     "build:android": "eas build --profile preview --platform android",
     "build:ios": "eas build --profile preview --platform ios",
-    "build:dev:android": "eas build --profile development --platform android"
+    "build:dev:android": "eas build --profile development --platform android",
+    "generate:icons": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -49,6 +50,7 @@
   "devDependencies": {
     "@types/react": "~19.1.0",
     "babel-plugin-styled-components": "^2.1.4",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   },
   "private": true

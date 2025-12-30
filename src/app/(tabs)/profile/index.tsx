@@ -4,20 +4,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
-import { colors, spacing, typography } from '../../../theme';
+import { spacing, typography } from '../../../theme';
+import { useTheme } from '../../../theme/theme-context';
 import { useAuth } from '../../../hooks/use-auth';
 import { useUser } from '../../../hooks/use-user';
+import { useFeedback } from '../../../hooks/use-feedback';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { cloudinaryService } from '../../../services/cloudinary.service';
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
+  const { colors, mode, setMode, isDark } = useTheme();
   const { user, logout } = useAuth();
   const { profile, updateProfile, isUpdating } = useUser();
+  const { submitFeedback, isSubmitting } = useFeedback();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(profile?.name || user?.name || '');
   const [avatar, setAvatar] = useState(profile?.avatar || user?.avatar || '');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackEmail, setFeedbackEmail] = useState(user?.email || '');
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'improvement' | 'other'>('other');
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -57,6 +65,28 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleSubmitFeedback = async () => {
+    if (!feedbackMessage.trim()) {
+      Alert.alert('Error', 'Please enter your feedback message');
+      return;
+    }
+
+    try {
+      await submitFeedback({
+        message: feedbackMessage,
+        email: feedbackEmail || undefined,
+        type: feedbackType,
+      });
+      Alert.alert('Success', 'Thank you for your feedback! We appreciate it.');
+      setFeedbackMessage('');
+      setFeedbackEmail(user?.email || '');
+      setFeedbackType('other');
+      setShowFeedback(false);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to submit feedback. Please try again.');
+    }
+  };
+
   const handleLogout = () => {
     Alert.alert(
       'Logout',
@@ -75,10 +105,12 @@ export default function ProfileScreen() {
     );
   };
 
+  const dynamicStyles = getStyles(colors);
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <View style={dynamicStyles.header}>
+        <Text style={dynamicStyles.title}>Profile</Text>
         {!isEditing && (
           <TouchableOpacity onPress={handleEdit}>
             <Ionicons name="create-outline" size={24} color={colors.primary} />
@@ -86,22 +118,22 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <View style={styles.profileSection}>
+      <ScrollView style={dynamicStyles.scrollView} contentContainerStyle={dynamicStyles.content}>
+        <View style={dynamicStyles.profileSection}>
           <TouchableOpacity
-            style={styles.avatarContainer}
+            style={dynamicStyles.avatarContainer}
             onPress={isEditing ? handleImagePick : undefined}
             disabled={!isEditing}
           >
             {avatar ? (
-              <Image source={{ uri: avatar }} style={styles.avatar} />
+              <Image source={{ uri: avatar }} style={dynamicStyles.avatar} />
             ) : (
-              <View style={styles.avatarPlaceholder}>
+              <View style={dynamicStyles.avatarPlaceholder}>
                 <Ionicons name="person" size={48} color={colors.white} />
               </View>
             )}
             {isEditing && (
-              <View style={styles.editIcon}>
+              <View style={dynamicStyles.editIcon}>
                 <Ionicons name="camera" size={20} color={colors.white} />
               </View>
             )}
@@ -109,21 +141,21 @@ export default function ProfileScreen() {
 
           {isEditing ? (
             <TextInput
-              style={styles.nameInput}
+              style={dynamicStyles.nameInput}
               value={name}
               onChangeText={setName}
               placeholder="Your name"
               placeholderTextColor={colors.gray[400]}
             />
           ) : (
-            <Text style={styles.name}>{profile?.name || user?.name || 'User'}</Text>
+            <Text style={dynamicStyles.name}>{profile?.name || user?.name || 'User'}</Text>
           )}
 
-          <Text style={styles.email}>{profile?.email || user?.email || ''}</Text>
+          <Text style={dynamicStyles.email}>{profile?.email || user?.email || ''}</Text>
         </View>
 
         {isEditing && (
-          <View style={styles.editActions}>
+          <View style={dynamicStyles.editActions}>
             <Button
               title="Save"
               onPress={handleSave}
@@ -139,22 +171,115 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        <Card style={styles.menuCard}>
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="settings-outline" size={24} color={colors.text.primary} />
-            <Text style={styles.menuText}>Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray[400]} />
+        <Card style={dynamicStyles.menuCard}>
+          <TouchableOpacity 
+            style={dynamicStyles.menuItem}
+            onPress={() => setShowFeedback(!showFeedback)}
+          >
+            <Ionicons name="chatbubble-outline" size={24} color={colors.text.primary} />
+            <Text style={dynamicStyles.menuText}>Send Feedback</Text>
+            <Ionicons 
+              name={showFeedback ? "chevron-up" : "chevron-forward"} 
+              size={20} 
+              color={colors.gray[400]} 
+            />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem}>
-            <Ionicons name="help-circle-outline" size={24} color={colors.text.primary} />
-            <Text style={styles.menuText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray[400]} />
+          {showFeedback && (
+            <View style={dynamicStyles.feedbackSection}>
+              <View style={dynamicStyles.feedbackTypeContainer}>
+                <Text style={dynamicStyles.feedbackLabel}>Type:</Text>
+                <View style={dynamicStyles.feedbackTypeButtons}>
+                  {(['bug', 'feature', 'improvement', 'other'] as const).map((type) => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        dynamicStyles.feedbackTypeButton,
+                        feedbackType === type && dynamicStyles.feedbackTypeButtonActive,
+                      ]}
+                      onPress={() => setFeedbackType(type)}
+                    >
+                      <Text
+                        style={[
+                          dynamicStyles.feedbackTypeButtonText,
+                          feedbackType === type && dynamicStyles.feedbackTypeButtonTextActive,
+                        ]}
+                      >
+                        {type.charAt(0).toUpperCase() + type.slice(1)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <TextInput
+                style={dynamicStyles.feedbackInput}
+                placeholder="Your email (optional)"
+                placeholderTextColor={colors.gray[400]}
+                value={feedbackEmail}
+                onChangeText={setFeedbackEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <TextInput
+                style={[dynamicStyles.feedbackInput, dynamicStyles.feedbackTextArea]}
+                placeholder="Tell us what you think..."
+                placeholderTextColor={colors.gray[400]}
+                value={feedbackMessage}
+                onChangeText={setFeedbackMessage}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+
+              <View style={dynamicStyles.feedbackActions}>
+                <Button
+                  title="Submit Feedback"
+                  onPress={handleSubmitFeedback}
+                  loading={isSubmitting}
+                  size="medium"
+                />
+                <Button
+                  title="Cancel"
+                  onPress={() => {
+                    setShowFeedback(false);
+                    setFeedbackMessage('');
+                    setFeedbackEmail(user?.email || '');
+                    setFeedbackType('other');
+                  }}
+                  variant="outline"
+                  size="medium"
+                />
+              </View>
+            </View>
+          )}
+
+          <TouchableOpacity 
+            style={dynamicStyles.menuItem}
+            onPress={() => {
+              const newMode = mode === 'light' ? 'dark' : mode === 'dark' ? 'auto' : 'light';
+              setMode(newMode);
+            }}
+          >
+            <Ionicons 
+              name={isDark ? "moon" : "sunny"} 
+              size={24} 
+              color={colors.text.primary} 
+            />
+            <Text style={dynamicStyles.menuText}>
+              Theme: {mode === 'auto' ? 'Auto' : mode === 'dark' ? 'Dark' : 'Light'}
+            </Text>
+            <Ionicons 
+              name="chevron-forward" 
+              size={20} 
+              color={colors.gray[400]} 
+            />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+          <TouchableOpacity style={dynamicStyles.menuItem} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color={colors.error} />
-            <Text style={[styles.menuText, { color: colors.error }]}>Logout</Text>
+            <Text style={[dynamicStyles.menuText, { color: colors.error }]}>Logout</Text>
           </TouchableOpacity>
         </Card>
       </ScrollView>
@@ -162,7 +287,7 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -257,6 +382,65 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
     flex: 1,
+  },
+  feedbackSection: {
+    padding: spacing.md,
+    backgroundColor: colors.gray[100],
+    borderTopWidth: 1,
+    borderTopColor: colors.gray[200],
+  },
+  feedbackTypeContainer: {
+    marginBottom: spacing.md,
+  },
+  feedbackLabel: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
+    fontWeight: '600',
+  },
+  feedbackTypeButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  feedbackTypeButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+  },
+  feedbackTypeButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  feedbackTypeButtonText: {
+    ...typography.bodySmall,
+    color: colors.text.primary,
+    fontWeight: '600',
+  },
+  feedbackTypeButtonTextActive: {
+    color: colors.white,
+  },
+  feedbackInput: {
+    ...typography.body,
+    color: colors.text.primary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+    borderRadius: 8,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    minHeight: 44,
+  },
+  feedbackTextArea: {
+    minHeight: 100,
+    maxHeight: 150,
+  },
+  feedbackActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
   },
 });
 

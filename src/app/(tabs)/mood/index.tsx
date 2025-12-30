@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
-import { colors, spacing, typography } from '../../../theme';
+import { spacing, typography } from '../../../theme';
+import { useTheme } from '../../../theme/theme-context';
 import { useMoods } from '../../../hooks/use-moods';
 import { LineChart } from 'react-native-gifted-charts';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ const moodOptions = [
 ];
 
 export default function MoodScreen() {
+  const { colors } = useTheme();
   const { moods, createMood, isCreating } = useMoods();
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -73,13 +75,47 @@ export default function MoodScreen() {
   };
 
   const chartData = getWeeklyData();
+  const dynamicStyles = getStyles(colors);
+
+  // Check if mood exists for selected date
+  const selectedDateMood = moods.find(
+    (m) => new Date(m.date).toDateString() === selectedDate.toDateString()
+  );
+
+  const getMoodEmoji = (moodType?: string) => {
+    switch (moodType) {
+      case 'happy': return '😊';
+      case 'excited': return '🤩';
+      case 'calm': return '😌';
+      case 'neutral': return '😐';
+      case 'anxious': return '😟';
+      case 'sad': return '😢';
+      case 'angry': return '😠';
+      case 'tired': return '😴';
+      default: return '😊';
+    }
+  };
+
+  const getMoodText = (moodType?: string) => {
+    switch (moodType) {
+      case 'happy': return 'Happy';
+      case 'excited': return 'Excited';
+      case 'calm': return 'Calm';
+      case 'neutral': return 'Neutral';
+      case 'anxious': return 'Anxious';
+      case 'sad': return 'Sad';
+      case 'angry': return 'Angry';
+      case 'tired': return 'Tired';
+      default: return 'Unknown';
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Mood Tracker</Text>
+    <SafeAreaView style={dynamicStyles.container} edges={['top']}>
+      <ScrollView style={dynamicStyles.scrollView} contentContainerStyle={dynamicStyles.content}>
+        <Text style={dynamicStyles.title}>Mood Tracker</Text>
 
-        <View style={styles.dateSelector}>
+        <View style={dynamicStyles.dateSelector}>
           <TouchableOpacity onPress={() => {
             const newDate = new Date(selectedDate);
             newDate.setDate(newDate.getDate() - 1);
@@ -87,7 +123,7 @@ export default function MoodScreen() {
           }}>
             <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.dateText}>
+          <Text style={dynamicStyles.dateText}>
             {selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
           </Text>
           <TouchableOpacity onPress={() => {
@@ -99,28 +135,38 @@ export default function MoodScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.moodSelection}>
-          <Text style={styles.question}>How are you feeling today?</Text>
-          <View style={styles.moodGrid}>
-            {moodOptions.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.moodOption,
-                  selectedMood === option.value && styles.selectedMood,
-                ]}
-                onPress={() => handleSelectMood(option.value)}
-              >
-                <Text style={styles.moodEmoji}>{option.emoji}</Text>
-                <Text style={styles.moodLabel}>{option.label}</Text>
-              </TouchableOpacity>
-            ))}
+        {selectedDateMood ? (
+          <Card style={dynamicStyles.moodCard}>
+            <Text style={dynamicStyles.moodEmoji}>{getMoodEmoji(selectedDateMood.moodType)}</Text>
+            <Text style={dynamicStyles.moodTitle}>You were feeling {getMoodText(selectedDateMood.moodType).toLowerCase()}</Text>
+            <Text style={dynamicStyles.moodDescription}>
+              Mood already recorded for this date.
+            </Text>
+          </Card>
+        ) : (
+          <View style={dynamicStyles.moodSelection}>
+            <Text style={dynamicStyles.question}>How are you feeling today?</Text>
+            <View style={dynamicStyles.moodGrid}>
+              {moodOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    dynamicStyles.moodOption,
+                    selectedMood === option.value && dynamicStyles.selectedMood,
+                  ]}
+                  onPress={() => handleSelectMood(option.value)}
+                >
+                  <Text style={dynamicStyles.moodEmoji}>{option.emoji}</Text>
+                  <Text style={dynamicStyles.moodLabel}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        )}
 
-        <Card style={styles.chartCard}>
-          <View style={styles.chartHeader}>
-            <Text style={styles.chartTitle}>Weekly Mood Trend</Text>
+        <Card style={dynamicStyles.chartCard}>
+          <View style={dynamicStyles.chartHeader}>
+            <Text style={dynamicStyles.chartTitle}>Weekly Mood Trend</Text>
             <Ionicons name="stats-chart" size={20} color={colors.primary} />
           </View>
           <LineChart
@@ -145,10 +191,10 @@ export default function MoodScreen() {
             rulesType="solid"
             rulesColor={colors.gray[200]}
           />
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>Mood Level</Text>
+          <View style={dynamicStyles.legend}>
+            <View style={dynamicStyles.legendItem}>
+              <View style={[dynamicStyles.legendDot, { backgroundColor: colors.primary }]} />
+              <Text style={dynamicStyles.legendText}>Mood Level</Text>
             </View>
           </View>
         </Card>
@@ -157,7 +203,7 @@ export default function MoodScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -185,6 +231,11 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text.primary,
   },
+  moodCard: {
+    alignItems: 'center',
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
   moodSelection: {
     marginBottom: spacing.xl,
   },
@@ -204,8 +255,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.md,
     borderRadius: 12,
-    backgroundColor: colors.white,
+    backgroundColor: colors.surface,
     minWidth: 80,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   selectedMood: {
     backgroundColor: colors.primaryLight,
@@ -215,6 +271,18 @@ const styles = StyleSheet.create({
   moodEmoji: {
     fontSize: 48,
     marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  moodTitle: {
+    ...typography.h3,
+    color: colors.text.primary,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  moodDescription: {
+    ...typography.body,
+    color: colors.text.secondary,
+    textAlign: 'center',
   },
   moodLabel: {
     ...typography.bodySmall,

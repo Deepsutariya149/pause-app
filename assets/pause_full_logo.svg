@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pause logo - full">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#8E7CC3"/>
+      <stop offset="100%" stop-color="#4AA3FF"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background (transparent) -->
+  <rect width="1200" height="400" fill="none"/>
+
+  <!-- gradient circle icon -->
+  <g transform="translate(0,0)">
+    <circle cx="200" cy="200" r="160" fill="url(#g1)"/>
+    <!-- left rounded pause bar -->
+    <rect x="160" y="120" width="40" height="160" rx="20" ry="20" fill="#FFFFFF" />
+    <!-- right rounded pause bar -->
+    <rect x="200" y="120" width="40" height="160" rx="20" ry="20" fill="#FFFFFF" />
+  </g>
+
+  <!-- Text: Pause. -->
+  <g transform="translate(0,0)">
+    <text x="420" y="245" font-family="Manrope, Poppins, 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="140" fill="#2e3340">
+      Pause<tspan font-weight="700">.</tspan>
+    </text>
+  </g>
+</svg>
