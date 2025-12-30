@@ -1,13 +1,28 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { goalService, Goal, UserGoal, GoalProgress } from '../services/goal.service';
 
 export const useGoals = () => {
   const queryClient = useQueryClient();
 
-  const { data: goals = { goals: [], total: 0 }, isLoading } = useQuery({
+  const {
+    data: goalsData,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
     queryKey: ['goals'],
-    queryFn: () => goalService.getGoals(),
+    queryFn: ({ pageParam = 1 }) => goalService.getGoals(pageParam, 20),
+    getNextPageParam: (lastPage, allPages) => {
+      const totalLoaded = allPages.reduce((sum, page) => sum + page.goals.length, 0);
+      return totalLoaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
   });
+
+  const goals = goalsData?.pages.flatMap(page => page.goals) || [];
+  const goalsTotal = goalsData?.pages[0]?.total || 0;
 
   const { data: myGoals = [], isLoading: isLoadingMyGoals } = useQuery({
     queryKey: ['myGoals'],
@@ -53,8 +68,8 @@ export const useGoals = () => {
   });
 
   return {
-    goals: goals.goals,
-    goalsTotal: goals.total,
+    goals,
+    goalsTotal,
     isLoading,
     myGoals,
     isLoadingMyGoals,
@@ -66,6 +81,10 @@ export const useGoals = () => {
     isLeaving: leaveMutation.isPending,
     updateProgress: updateProgressMutation.mutateAsync,
     isUpdatingProgress: updateProgressMutation.isPending,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetchGoals: refetch,
   };
 };
 

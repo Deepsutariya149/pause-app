@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert, Dimensions, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card } from '../../../components/Card';
 import { Button } from '../../../components/Button';
@@ -18,6 +18,7 @@ export default function GoalsScreen() {
   const queryClient = useQueryClient();
   const {
     goals,
+    goalsTotal,
     isLoading,
     myGoals,
     isLoadingMyGoals,
@@ -28,6 +29,10 @@ export default function GoalsScreen() {
     isLeaving,
     updateProgress,
     isUpdatingProgress,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetchGoals,
   } = useGoals();
 
   const { dailyStats, isLoading: isLoadingStats, totalGoals } = useWeeklyGoalStats(myGoals);
@@ -40,11 +45,17 @@ export default function GoalsScreen() {
     setRefreshing(true);
     // Force refetch all goal-related queries
     await Promise.all([
-      queryClient.refetchQueries({ queryKey: ['goals'] }),
+      refetchGoals(),
       queryClient.refetchQueries({ queryKey: ['myGoals'] }),
       queryClient.refetchQueries({ queryKey: ['todayProgress'] }),
     ]);
     setRefreshing(false);
+  };
+
+  const handleLoadMore = () => {
+    if (hasNextPage && !isFetchingNextPage && activeTab === 'available') {
+      fetchNextPage();
+    }
   };
 
   const isGoalJoined = (goalId: string): boolean => {
@@ -193,108 +204,113 @@ export default function GoalsScreen() {
 
   const dynamicStyles = getStyles(colors);
 
+  const renderListHeader = () => (
+    <>
+      <Text style={dynamicStyles.title}>Goals</Text>
+      <Text style={dynamicStyles.subtitle}>Track your daily progress and achieve your wellness goals</Text>
+
+      <View style={dynamicStyles.tabContainer}>
+        <TouchableOpacity
+          style={[dynamicStyles.tab, activeTab === 'myGoals' && dynamicStyles.activeTab]}
+          onPress={() => setActiveTab('myGoals')}
+        >
+          <Text style={[dynamicStyles.tabText, activeTab === 'myGoals' && dynamicStyles.activeTabText]}>
+            My Goals ({myGoals.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[dynamicStyles.tab, activeTab === 'available' && dynamicStyles.activeTab]}
+          onPress={() => setActiveTab('available')}
+        >
+          <Text style={[dynamicStyles.tabText, activeTab === 'available' && dynamicStyles.activeTabText]}>
+            Available ({goalsTotal})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'myGoals' && myGoals.length > 0 && (
+        <Card style={dynamicStyles.chartCard}>
+          <View style={dynamicStyles.chartHeader}>
+            <View>
+              <Text style={dynamicStyles.chartTitle}>Weekly Completion Rate</Text>
+              <Text style={dynamicStyles.chartSubtitle}>Your goal completion over the last 7 days</Text>
+            </View>
+            <Ionicons name="stats-chart" size={24} color={colors.primary} />
+          </View>
+          {isLoadingStats ? (
+            <View style={dynamicStyles.chartLoading}>
+              <Text style={dynamicStyles.chartLoadingText}>Loading chart data...</Text>
+            </View>
+          ) : dailyStats.length > 0 ? (
+            <>
+              <LineChart
+                data={dailyStats}
+                width={width - 80}
+                height={180}
+                spacing={40}
+                thickness={3}
+                color={colors.primary}
+                hideRules
+                hideYAxisText
+                yAxisColor={colors.gray[300]}
+                xAxisColor={colors.gray[300]}
+                curved
+                areaChart
+                startFillColor={colors.primary}
+                endFillColor={colors.primaryLight}
+                startOpacity={0.4}
+                endOpacity={0.1}
+                yAxisLabelWidth={0}
+                yAxisTextStyle={{ color: colors.text.secondary, fontSize: 12 }}
+                rulesType="solid"
+                rulesColor={colors.gray[200]}
+                maxValue={100}
+                yAxisLabelSuffix="%"
+                noOfSections={4}
+                yAxisLabelPrefix=""
+              />
+              <View style={dynamicStyles.chartStats}>
+                <View style={dynamicStyles.statItem}>
+                  <Text style={dynamicStyles.statValue}>
+                    {dailyStats.reduce((sum, day) => sum + day.completedCount, 0)}
+                  </Text>
+                  <Text style={dynamicStyles.statLabel}>Completed</Text>
+                </View>
+                <View style={dynamicStyles.statDivider} />
+                <View style={dynamicStyles.statItem}>
+                  <Text style={dynamicStyles.statValue}>
+                    {Math.round(dailyStats.reduce((sum, day) => sum + day.completionRate, 0) / dailyStats.length)}%
+                  </Text>
+                  <Text style={dynamicStyles.statLabel}>Avg. Rate</Text>
+                </View>
+                <View style={dynamicStyles.statDivider} />
+                <View style={dynamicStyles.statItem}>
+                  <Text style={dynamicStyles.statValue}>{totalGoals}</Text>
+                  <Text style={dynamicStyles.statLabel}>Total Goals</Text>
+                </View>
+              </View>
+            </>
+          ) : (
+            <View style={dynamicStyles.chartEmpty}>
+              <Ionicons name="bar-chart-outline" size={48} color={colors.text.secondary} />
+              <Text style={dynamicStyles.chartEmptyText}>No completion data yet</Text>
+              <Text style={dynamicStyles.chartEmptySubtext}>Complete your goals to see your progress!</Text>
+            </View>
+          )}
+        </Card>
+      )}
+    </>
+  );
+
   return (
     <SafeAreaView style={dynamicStyles.container} edges={['top']}>
-      <ScrollView
-        style={dynamicStyles.scrollView}
-        contentContainerStyle={dynamicStyles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <Text style={dynamicStyles.title}>Goals</Text>
-        <Text style={dynamicStyles.subtitle}>Track your daily progress and achieve your wellness goals</Text>
-
-        <View style={dynamicStyles.tabContainer}>
-          <TouchableOpacity
-            style={[dynamicStyles.tab, activeTab === 'myGoals' && dynamicStyles.activeTab]}
-            onPress={() => setActiveTab('myGoals')}
-          >
-            <Text style={[dynamicStyles.tabText, activeTab === 'myGoals' && dynamicStyles.activeTabText]}>
-              My Goals ({myGoals.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[dynamicStyles.tab, activeTab === 'available' && dynamicStyles.activeTab]}
-            onPress={() => setActiveTab('available')}
-          >
-            <Text style={[dynamicStyles.tabText, activeTab === 'available' && dynamicStyles.activeTabText]}>
-              Available ({goals.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {activeTab === 'myGoals' && myGoals.length > 0 && (
-          <Card style={dynamicStyles.chartCard}>
-            <View style={dynamicStyles.chartHeader}>
-              <View>
-                <Text style={dynamicStyles.chartTitle}>Weekly Completion Rate</Text>
-                <Text style={dynamicStyles.chartSubtitle}>Your goal completion over the last 7 days</Text>
-              </View>
-              <Ionicons name="stats-chart" size={24} color={colors.primary} />
-            </View>
-            {isLoadingStats ? (
-              <View style={dynamicStyles.chartLoading}>
-                <Text style={dynamicStyles.chartLoadingText}>Loading chart data...</Text>
-              </View>
-            ) : dailyStats.length > 0 ? (
-              <>
-                <LineChart
-                  data={dailyStats}
-                  width={width - 80}
-                  height={180}
-                  spacing={40}
-                  thickness={3}
-                  color={colors.primary}
-                  hideRules
-                  hideYAxisText
-                  yAxisColor={colors.gray[300]}
-                  xAxisColor={colors.gray[300]}
-                  curved
-                  areaChart
-                  startFillColor={colors.primary}
-                  endFillColor={colors.primaryLight}
-                  startOpacity={0.4}
-                  endOpacity={0.1}
-                  yAxisLabelWidth={0}
-                  yAxisTextStyle={{ color: colors.text.secondary, fontSize: 12 }}
-                  rulesType="solid"
-                  rulesColor={colors.gray[200]}
-                  maxValue={100}
-                  yAxisLabelSuffix="%"
-                  noOfSections={4}
-                  yAxisLabelPrefix=""
-                />
-                <View style={dynamicStyles.chartStats}>
-                  <View style={dynamicStyles.statItem}>
-                    <Text style={dynamicStyles.statValue}>
-                      {dailyStats.reduce((sum, day) => sum + day.completedCount, 0)}
-                    </Text>
-                    <Text style={dynamicStyles.statLabel}>Completed</Text>
-                  </View>
-                  <View style={dynamicStyles.statDivider} />
-                  <View style={dynamicStyles.statItem}>
-                    <Text style={dynamicStyles.statValue}>
-                      {Math.round(dailyStats.reduce((sum, day) => sum + day.completionRate, 0) / dailyStats.length)}%
-                    </Text>
-                    <Text style={dynamicStyles.statLabel}>Avg. Rate</Text>
-                  </View>
-                  <View style={dynamicStyles.statDivider} />
-                  <View style={dynamicStyles.statItem}>
-                    <Text style={dynamicStyles.statValue}>{totalGoals}</Text>
-                    <Text style={dynamicStyles.statLabel}>Total Goals</Text>
-                  </View>
-                </View>
-              </>
-            ) : (
-              <View style={dynamicStyles.chartEmpty}>
-                <Ionicons name="bar-chart-outline" size={48} color={colors.text.secondary} />
-                <Text style={dynamicStyles.chartEmptyText}>No completion data yet</Text>
-                <Text style={dynamicStyles.chartEmptySubtext}>Complete your goals to see your progress!</Text>
-              </View>
-            )}
-          </Card>
-        )}
-
-        {activeTab === 'myGoals' ? (
+      {activeTab === 'myGoals' ? (
+        <ScrollView
+          style={dynamicStyles.scrollView}
+          contentContainerStyle={dynamicStyles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          {renderListHeader()}
           <View style={dynamicStyles.goalsList}>
             {isLoadingMyGoals ? (
               <Card style={dynamicStyles.emptyCard}>
@@ -320,22 +336,40 @@ export default function GoalsScreen() {
               })
             )}
           </View>
-        ) : (
-          <View style={dynamicStyles.goalsList}>
-            {isLoading ? (
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={goals}
+          keyExtractor={(item) => item._id}
+          renderItem={({ item }) => renderGoalCard(item, isGoalJoined(item._id))}
+          ListHeaderComponent={renderListHeader}
+          contentContainerStyle={dynamicStyles.content}
+          ListEmptyComponent={
+            isLoading ? (
               <Card style={dynamicStyles.emptyCard}>
                 <Text style={dynamicStyles.emptyText}>Loading goals...</Text>
               </Card>
-            ) : goals.length === 0 ? (
+            ) : (
               <Card style={dynamicStyles.emptyCard}>
                 <Text style={dynamicStyles.emptyText}>No goals available at the moment</Text>
               </Card>
-            ) : (
-              goals.map((goal) => renderGoalCard(goal, isGoalJoined(goal._id)))
-            )}
-          </View>
-        )}
-      </ScrollView>
+            )
+          }
+          ListFooterComponent={
+            isFetchingNextPage ? (
+              <View style={dynamicStyles.loadingFooter}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={dynamicStyles.loadingFooterText}>Loading more goals...</Text>
+              </View>
+            ) : null
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -551,6 +585,18 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     width: 1,
     backgroundColor: colors.gray[200],
     marginHorizontal: spacing.md,
+  },
+  loadingFooter: {
+    padding: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  loadingFooterText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+    marginLeft: spacing.sm,
   },
 });
 
