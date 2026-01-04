@@ -6,15 +6,16 @@ import { Button } from '../../../components/Button';
 import { spacing, typography } from '../../../theme';
 import { useTheme } from '../../../theme/theme-context';
 import { useGoals, useWeeklyGoalStats } from '../../../hooks/use-goals';
-import { Goal, UserGoal } from '../../../services/goal.service';
+import { Goal, UserGoal, goalService } from '../../../services/goal.service';
 import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { LineChart } from 'react-native-gifted-charts';
+import { toast } from '../../../utils/toast';
 
 const { width } = Dimensions.get('window');
 
 export default function GoalsScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark, mode, setMode } = useTheme();
   const queryClient = useQueryClient();
   const {
     goals,
@@ -67,9 +68,14 @@ export default function GoalsScreen() {
 
   // Update completed goals when todayProgress changes
   useEffect(() => {
+    if (!todayProgress || !Array.isArray(todayProgress)) {
+      setCompletedGoals(new Set());
+      return;
+    }
+
     const completed = new Set<string>();
     todayProgress.forEach((p) => {
-      if (p.completed) {
+      if (p && p.completed) {
         const gId = typeof p.goalId === 'object' ? p.goalId._id : p.goalId;
         completed.add(gId);
       }
@@ -83,7 +89,11 @@ export default function GoalsScreen() {
       return true;
     }
     // Then check from API data
+    if (!todayProgress || !Array.isArray(todayProgress)) {
+      return false;
+    }
     const progress = todayProgress.find((p) => {
+      if (!p) return false;
       const gId = typeof p.goalId === 'object' ? p.goalId._id : p.goalId;
       return gId === goalId;
     });
@@ -93,20 +103,22 @@ export default function GoalsScreen() {
   const handleJoinGoal = async (goalId: string) => {
     try {
       await joinGoal(goalId);
-      Alert.alert('Success', 'You have joined this goal!');
-    } catch (error) {
+      toast.success('You have successfully joined this goal! 🎯');
+    } catch (error: any) {
       console.error('Failed to join goal:', error);
-      Alert.alert('Error', 'Failed to join goal. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to join goal. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
   const handleLeaveGoal = async (goalId: string) => {
     try {
       await leaveGoal(goalId);
-      Alert.alert('Success', 'You have left this goal.');
-    } catch (error) {
+      toast.success('You have left this goal.');
+    } catch (error: any) {
       console.error('Failed to leave goal:', error);
-      Alert.alert('Error', 'Failed to leave goal. Please try again.');
+      const errorMessage = error?.response?.data?.message || error?.message || 'Failed to leave goal. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -115,10 +127,17 @@ export default function GoalsScreen() {
       // Immediately update local state to hide button
       setCompletedGoals(prev => new Set(prev).add(goalId));
       
-      // Explicitly set today's date to ensure daily tracking
+      // Get today's date in local timezone (YYYY-MM-DD format)
+      // This ensures we're using the same date regardless of timezone
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayISO = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const todayISO = `${year}-${month}-${day}`;
+      
+      // Get goal info to check points
+      const goal = goals.find(g => g._id === goalId);
+      const points = goal?.points || 0;
       
       // Update progress
       await updateProgress({
@@ -126,8 +145,23 @@ export default function GoalsScreen() {
         data: { completed: true, date: todayISO },
       });
       
-      // Show success message
-      Alert.alert('Success', 'Goal marked as completed for today! 🎉');
+      // Check if goal was fully completed (all days) to award points
+      try {
+        const completionStatus = await goalService.getGoalCompletionStatus(goalId);
+        
+        if (completionStatus.isCompleted && completionStatus.pointsAwarded && points > 0) {
+          toast.success(
+            `Congratulations! You've completed this goal and earned ${points} points! 🎉`,
+            'Goal Completed!'
+          );
+        } else {
+          toast.success('Goal marked as completed for today! 🎉');
+        }
+      } catch (statusError) {
+        // If status check fails, just show regular success
+        console.log('Status check error:', statusError);
+        toast.success('Goal marked as completed for today! 🎉');
+      }
       
       // Force immediate refetch and update
       await Promise.all([
@@ -147,13 +181,14 @@ export default function GoalsScreen() {
         return newSet;
       });
       console.error('Failed to mark goal as completed:', error);
-      Alert.alert('Error', 'Failed to mark goal as completed. Please try again.');
+      const errorMessage = (error as any)?.response?.data?.message || (error as any)?.message || 'Failed to mark goal as completed. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
   const renderGoalCard = (goal: Goal, isJoined: boolean) => {
     const todayCompleted = isJoined ? getTodayProgress(goal._id) : false;
-    const dynamicStyles = getStyles(colors);
+    const dynamicStyles = getStyles({ colors, isDark, mode, setMode });
 
     return (
       <Card key={goal._id} style={dynamicStyles.goalCard}>
@@ -170,24 +205,34 @@ export default function GoalsScreen() {
         </View>
         <Text style={dynamicStyles.goalDescription}>{goal.description}</Text>
 
+        <View style={dynamicStyles.goalMeta}>
+          {goal.timing && (
+            <View style={dynamicStyles.metaItem}>
+              <Ionicons name="time-outline" size={16} color={colors.text.secondary} />
+              <Text style={dynamicStyles.metaText}>{goal.timing}</Text>
+            </View>
+          )}
+          {goal.points !== undefined && goal.points > 0 && (
+            <View style={dynamicStyles.metaItem}>
+              <Ionicons name="star" size={16} color={colors.primary} />
+              <Text style={[dynamicStyles.metaText, dynamicStyles.pointsText]}>
+                {goal.points} points
+              </Text>
+            </View>
+          )}
+        </View>
+
         {isJoined ? (
           <View style={dynamicStyles.progressSection}>
-            {todayCompleted ? (
-              <View style={dynamicStyles.completedSection}>
-                <View style={dynamicStyles.completedBadge}>
-                  <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
-                  <Text style={dynamicStyles.completedText}>Completed today! 🎉</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={dynamicStyles.completeButton}>
-                <Button
-                  title="Mark as Completed Today"
-                  onPress={() => handleMarkCompleted(goal._id)}
-                  loading={isUpdatingProgress}
-                />
-              </View>
-            )}
+            <View style={dynamicStyles.completeButton}>
+              <Button
+                title={todayCompleted ? "Completed for today" : "Mark as Completed Today"}
+                onPress={() => handleMarkCompleted(goal._id)}
+                loading={isUpdatingProgress}
+                disabled={todayCompleted}
+                variant={todayCompleted ? "outline" : "primary"}
+              />
+            </View>
           </View>
         ) : (
           <View style={dynamicStyles.joinButton}>
@@ -202,7 +247,7 @@ export default function GoalsScreen() {
     );
   };
 
-  const dynamicStyles = getStyles(colors);
+  const dynamicStyles = getStyles({ colors, isDark, mode, setMode });
 
   const renderListHeader = () => (
     <>
@@ -215,7 +260,7 @@ export default function GoalsScreen() {
           onPress={() => setActiveTab('myGoals')}
         >
           <Text style={[dynamicStyles.tabText, activeTab === 'myGoals' && dynamicStyles.activeTabText]}>
-            My Goals ({myGoals.length})
+            My Goals ({Array.isArray(myGoals) ? myGoals.length : 0})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -228,7 +273,7 @@ export default function GoalsScreen() {
         </TouchableOpacity>
       </View>
 
-      {activeTab === 'myGoals' && myGoals.length > 0 && (
+      {activeTab === 'myGoals' && Array.isArray(myGoals) && myGoals.length > 0 && (
         <Card style={dynamicStyles.chartCard}>
           <View style={dynamicStyles.chartHeader}>
             <View>
@@ -241,10 +286,16 @@ export default function GoalsScreen() {
             <View style={dynamicStyles.chartLoading}>
               <Text style={dynamicStyles.chartLoadingText}>Loading chart data...</Text>
             </View>
-          ) : dailyStats.length > 0 ? (
+          ) : Array.isArray(dailyStats) && dailyStats.length > 0 ? (
             <>
               <LineChart
-                data={dailyStats}
+                data={dailyStats.map(stat => ({
+                  ...stat,
+                  text: stat.label,
+                  textColor: isDark ? colors.white : colors.text.primary,
+                  textFontSize: 12,
+                  textBackgroundColor: 'transparent',
+                }))}
                 width={width - 80}
                 height={180}
                 spacing={40}
@@ -262,6 +313,8 @@ export default function GoalsScreen() {
                 endOpacity={0.1}
                 yAxisLabelWidth={0}
                 yAxisTextStyle={{ color: colors.text.secondary, fontSize: 12 }}
+                textColor={isDark ? colors.white : colors.text.primary}
+                textFontSize={12}
                 rulesType="solid"
                 rulesColor={colors.gray[200]}
                 maxValue={100}
@@ -272,14 +325,16 @@ export default function GoalsScreen() {
               <View style={dynamicStyles.chartStats}>
                 <View style={dynamicStyles.statItem}>
                   <Text style={dynamicStyles.statValue}>
-                    {dailyStats.reduce((sum, day) => sum + day.completedCount, 0)}
+                    {Array.isArray(dailyStats) ? dailyStats.reduce((sum, day) => sum + (day.completedCount || 0), 0) : 0}
                   </Text>
                   <Text style={dynamicStyles.statLabel}>Completed</Text>
                 </View>
                 <View style={dynamicStyles.statDivider} />
                 <View style={dynamicStyles.statItem}>
                   <Text style={dynamicStyles.statValue}>
-                    {Math.round(dailyStats.reduce((sum, day) => sum + day.completionRate, 0) / dailyStats.length)}%
+                    {Array.isArray(dailyStats) && dailyStats.length > 0 
+                      ? Math.round(dailyStats.reduce((sum, day) => sum + day.completionRate, 0) / dailyStats.length)
+                      : 0}%
                   </Text>
                   <Text style={dynamicStyles.statLabel}>Avg. Rate</Text>
                 </View>
@@ -316,7 +371,7 @@ export default function GoalsScreen() {
               <Card style={dynamicStyles.emptyCard}>
                 <Text style={dynamicStyles.emptyText}>Loading your goals...</Text>
               </Card>
-            ) : myGoals.length === 0 ? (
+            ) : !Array.isArray(myGoals) || myGoals.length === 0 ? (
               <Card style={dynamicStyles.emptyCard}>
                 <Ionicons name="flag-outline" size={48} color={colors.text.secondary} />
                 <Text style={dynamicStyles.emptyText}>You haven't joined any goals yet</Text>
@@ -374,7 +429,9 @@ export default function GoalsScreen() {
   );
 }
 
-const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
+const getStyles = (theme: ReturnType<typeof useTheme>) => {
+  const { colors, isDark } = theme;
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -453,18 +510,38 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     borderRadius: 12,
   },
   joinedBadge: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: isDark ? colors.primary : colors.primaryLight,
   },
   badgeText: {
     ...typography.bodySmall,
-    color: colors.primary,
+    color: isDark ? colors.white : colors.primary,
     fontWeight: '600',
   },
   goalDescription: {
     ...typography.body,
     color: colors.text.secondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     lineHeight: 22,
+  },
+  goalMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metaText: {
+    ...typography.bodySmall,
+    color: colors.text.secondary,
+  },
+  pointsText: {
+    color: colors.primary,
+    fontWeight: '600',
   },
   progressSection: {
     marginTop: spacing.md,
@@ -476,7 +553,7 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primaryLight,
+    backgroundColor: isDark ? colors.primary : colors.primaryLight,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     borderRadius: 12,
@@ -484,7 +561,7 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
   },
   completedText: {
     ...typography.body,
-    color: colors.primary,
+    color: isDark ? colors.white : colors.primary,
     fontWeight: '600',
   },
   completeButton: {
@@ -598,5 +675,6 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     color: colors.text.secondary,
     marginLeft: spacing.sm,
   },
-});
+  });
+};
 

@@ -5,6 +5,8 @@ export interface Goal {
   title: string;
   description: string;
   icon?: string;
+  timing: string; // e.g., "1 month", "2 months", "3 months"
+  points: number; // Reward points for completing the goal
   isActive: boolean;
   createdBy: {
     _id: string;
@@ -40,7 +42,15 @@ export interface GoalProgress {
 export const goalService = {
   // Get all active goals
   async getGoals(page: number = 1, limit: number = 50): Promise<{ goals: Goal[]; total: number }> {
-    return await api.get<{ goals: Goal[]; total: number }>(`/goals?page=${page}&limit=${limit}`);
+    const response = await api.get<{ goals: Goal[]; total: number }>(`/goals?page=${page}&limit=${limit}`);
+    // Ensure response has the correct structure
+    if (!response || typeof response !== 'object') {
+      return { goals: [], total: 0 };
+    }
+    return {
+      goals: Array.isArray(response.goals) ? response.goals : [],
+      total: typeof response.total === 'number' ? response.total : 0,
+    };
   },
 
   // Get a single goal
@@ -79,13 +89,33 @@ export const goalService = {
 
   // Get today's progress for all goals
   async getTodayProgress(): Promise<GoalProgress[]> {
-    return await api.get<GoalProgress[]>('/goals/user/today-progress');
+    try {
+      const data = await api.get<GoalProgress[]>('/goals/user/today-progress');
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Error fetching today progress:', error);
+      return [];
+    }
   },
 
   // Get goal statistics
   async getGoalStats(goalId: string): Promise<{ totalJoined: number; totalCompleted: number }> {
     return await api.get<{ totalJoined: number; totalCompleted: number }>(`/goals/${goalId}/stats`);
   },
+
+  // Get goal completion status
+  async getGoalCompletionStatus(goalId: string): Promise<{
+    userGoal: UserGoal;
+    isCompleted: boolean;
+    progressPercentage: number;
+    daysCompleted: number;
+    pointsAwarded: boolean;
+    startDate?: string;
+    endDate?: string;
+  }> {
+    return await api.get(`/goals/${goalId}/completion-status`);
+  },
 };
+
 
 

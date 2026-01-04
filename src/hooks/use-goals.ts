@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery, useQueries } from '@tanstack/react-query';
 import { goalService, Goal, UserGoal, GoalProgress } from '../services/goal.service';
 
 export const useGoals = () => {
@@ -15,13 +15,22 @@ export const useGoals = () => {
     queryKey: ['goals'],
     queryFn: ({ pageParam = 1 }) => goalService.getGoals(pageParam, 20),
     getNextPageParam: (lastPage, allPages) => {
-      const totalLoaded = allPages.reduce((sum, page) => sum + page.goals.length, 0);
+      // Safely check if lastPage and goals exist
+      if (!lastPage || !lastPage.goals || !Array.isArray(lastPage.goals)) {
+        return undefined;
+      }
+      const totalLoaded = allPages.reduce((sum, page) => {
+        if (!page || !page.goals || !Array.isArray(page.goals)) {
+          return sum;
+        }
+        return sum + page.goals.length;
+      }, 0);
       return totalLoaded < lastPage.total ? allPages.length + 1 : undefined;
     },
     initialPageParam: 1,
   });
 
-  const goals = goalsData?.pages.flatMap(page => page.goals) || [];
+  const goals = goalsData?.pages.flatMap(page => (page?.goals && Array.isArray(page.goals)) ? page.goals : []) || [];
   const goalsTotal = goalsData?.pages[0]?.total || 0;
 
   const { data: myGoals = [], isLoading: isLoadingMyGoals } = useQuery({
@@ -29,12 +38,15 @@ export const useGoals = () => {
     queryFn: () => goalService.getMyGoals(),
   });
 
-  const { data: todayProgress = [], isLoading: isLoadingTodayProgress } = useQuery({
+  const { data: todayProgressData, isLoading: isLoadingTodayProgress } = useQuery({
     queryKey: ['todayProgress'],
     queryFn: () => goalService.getTodayProgress(),
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
+
+  // Ensure todayProgress is always an array
+  const todayProgress = Array.isArray(todayProgressData) ? todayProgressData : [];
 
   const joinMutation = useMutation({
     mutationFn: (goalId: string) => goalService.joinGoal(goalId),
@@ -97,7 +109,10 @@ export const useGoalProgress = (goalId: string, startDate?: string, endDate?: st
 };
 
 // Hook to get weekly completion stats for all goals
-export const useWeeklyGoalStats = (myGoals: UserGoal[]) => {
+export const useWeeklyGoalStats = (myGoals: UserGoal[] | undefined) => {
+  // Ensure myGoals is always an array - handle undefined/null cases
+  const safeMyGoals: UserGoal[] = Array.isArray(myGoals) ? myGoals : [];
+
   const getLast7Days = () => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -110,31 +125,45 @@ export const useWeeklyGoalStats = (myGoals: UserGoal[]) => {
   };
 
   const last7Days = getLast7Days();
-  const endDate = last7Days[6].toISOString();
-  const startDate = last7Days[0].toISOString();
+  const endDate = last7Days[6] ? last7Days[6].toISOString() : '';
+  const startDate = last7Days[0] ? last7Days[0].toISOString() : '';
 
-  // Fetch progress for all user goals
-  const progressQueries = myGoals.map((userGoal) => {
-    const goalId = typeof userGoal.goalId === 'object' ? userGoal.goalId._id : userGoal.goalId;
-    return useQuery({
+  // Use useQueries instead of mapping useQuery (which violates Rules of Hooks)
+  // Only fetch if we have goals and valid dates
+  const goalIds = safeMyGoals
+    .filter((ug) => ug && (typeof ug.goalId === 'object' ? ug.goalId?._id : ug.goalId))
+    .map((ug) => (typeof ug.goalId === 'object' ? ug.goalId._id : ug.goalId))
+    .filter(Boolean) as string[];
+
+  // Fetch all progress using useQueries (proper way to handle dynamic queries)
+  const progressQueries = useQueries({
+    queries: goalIds.map((goalId) => ({
       queryKey: ['goalProgress', goalId, startDate, endDate],
       queryFn: () => goalService.getProgress(goalId, startDate, endDate),
-      enabled: !!goalId && myGoals.length > 0,
-    });
+      enabled: !!goalId && goalIds.length > 0 && !!startDate && !!endDate,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    })),
   });
 
-  const isLoading = progressQueries.some(q => q.isLoading);
-  const allProgress = progressQueries.flatMap(q => q.data || []);
+  const isLoading = progressQueries.some((q: any) => q?.isLoading || false);
+  const allProgress = progressQueries.flatMap((q: any) => 
+    (q?.data && Array.isArray(q.data)) ? q.data : []
+  );
 
   // Calculate daily completion counts
   const dailyStats = last7Days.map((date) => {
     const dateStr = date.toISOString().split('T')[0];
     const completedCount = allProgress.filter((p) => {
-      const progressDate = new Date(p.date).toISOString().split('T')[0];
-      return progressDate === dateStr && p.completed;
+      if (!p || !p.date) return false;
+      try {
+        const progressDate = new Date(p.date).toISOString().split('T')[0];
+        return progressDate === dateStr && p.completed === true;
+      } catch {
+        return false;
+      }
     }).length;
     
-    const totalGoals = myGoals.length;
+    const totalGoals = safeMyGoals.length;
     const completionRate = totalGoals > 0 ? (completedCount / totalGoals) * 100 : 0;
 
     return {
@@ -149,9 +178,9 @@ export const useWeeklyGoalStats = (myGoals: UserGoal[]) => {
   });
 
   return {
-    dailyStats,
+    dailyStats: Array.isArray(dailyStats) ? dailyStats : [],
     isLoading,
-    totalGoals: myGoals.length,
+    totalGoals: safeMyGoals.length,
   };
 };
 

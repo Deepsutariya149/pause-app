@@ -23,9 +23,8 @@ export default function ProfileScreen() {
   const [name, setName] = useState(profile?.name || user?.name || '');
   const [avatar, setAvatar] = useState(profile?.avatar || user?.avatar || '');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState<number>(0);
   const [feedbackMessage, setFeedbackMessage] = useState('');
-  const [feedbackEmail, setFeedbackEmail] = useState(user?.email || '');
-  const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'improvement' | 'other'>('other');
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -66,6 +65,11 @@ export default function ProfileScreen() {
   };
 
   const handleSubmitFeedback = async () => {
+    if (!feedbackRating || feedbackRating < 1 || feedbackRating > 5) {
+      Alert.alert('Error', 'Please select a rating');
+      return;
+    }
+
     if (!feedbackMessage.trim()) {
       Alert.alert('Error', 'Please enter your feedback message');
       return;
@@ -73,14 +77,12 @@ export default function ProfileScreen() {
 
     try {
       await submitFeedback({
+        rating: feedbackRating,
         message: feedbackMessage,
-        email: feedbackEmail || undefined,
-        type: feedbackType,
       });
       Alert.alert('Success', 'Thank you for your feedback! We appreciate it.');
       setFeedbackMessage('');
-      setFeedbackEmail(user?.email || '');
-      setFeedbackType('other');
+      setFeedbackRating(0);
       setShowFeedback(false);
     } catch (error) {
       Alert.alert('Error', 'Failed to submit feedback. Please try again.');
@@ -187,40 +189,24 @@ export default function ProfileScreen() {
 
           {showFeedback && (
             <View style={dynamicStyles.feedbackSection}>
-              <View style={dynamicStyles.feedbackTypeContainer}>
-                <Text style={dynamicStyles.feedbackLabel}>Type:</Text>
-                <View style={dynamicStyles.feedbackTypeButtons}>
-                  {(['bug', 'feature', 'improvement', 'other'] as const).map((type) => (
+              <View style={dynamicStyles.feedbackRatingContainer}>
+                <Text style={dynamicStyles.feedbackLabel}>Rating:</Text>
+                <View style={dynamicStyles.feedbackRatingStars}>
+                  {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity
-                      key={type}
-                      style={[
-                        dynamicStyles.feedbackTypeButton,
-                        feedbackType === type && dynamicStyles.feedbackTypeButtonActive,
-                      ]}
-                      onPress={() => setFeedbackType(type)}
+                      key={star}
+                      onPress={() => setFeedbackRating(star)}
+                      style={dynamicStyles.feedbackStarButton}
                     >
-                      <Text
-                        style={[
-                          dynamicStyles.feedbackTypeButtonText,
-                          feedbackType === type && dynamicStyles.feedbackTypeButtonTextActive,
-                        ]}
-                      >
-                        {type.charAt(0).toUpperCase() + type.slice(1)}
-                      </Text>
+                      <Ionicons
+                        name={star <= feedbackRating ? 'star' : 'star-outline'}
+                        size={32}
+                        color={star <= feedbackRating ? colors.primary : colors.gray[400]}
+                      />
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
-
-              <TextInput
-                style={dynamicStyles.feedbackInput}
-                placeholder="Your email (optional)"
-                placeholderTextColor={colors.gray[400]}
-                value={feedbackEmail}
-                onChangeText={setFeedbackEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
 
               <TextInput
                 style={[dynamicStyles.feedbackInput, dynamicStyles.feedbackTextArea]}
@@ -239,14 +225,14 @@ export default function ProfileScreen() {
                   onPress={handleSubmitFeedback}
                   loading={isSubmitting}
                   size="medium"
+                  disabled={!feedbackRating || !feedbackMessage.trim()}
                 />
                 <Button
                   title="Cancel"
                   onPress={() => {
                     setShowFeedback(false);
                     setFeedbackMessage('');
-                    setFeedbackEmail(user?.email || '');
-                    setFeedbackType('other');
+                    setFeedbackRating(0);
                   }}
                   variant="outline"
                   size="medium"
@@ -389,7 +375,7 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     borderTopWidth: 1,
     borderTopColor: colors.gray[200],
   },
-  feedbackTypeContainer: {
+  feedbackRatingContainer: {
     marginBottom: spacing.md,
   },
   feedbackLabel: {
@@ -398,30 +384,13 @@ const getStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.
     marginBottom: spacing.sm,
     fontWeight: '600',
   },
-  feedbackTypeButtons: {
+  feedbackRatingStars: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
+    alignItems: 'center',
   },
-  feedbackTypeButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: 8,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.gray[300],
-  },
-  feedbackTypeButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  feedbackTypeButtonText: {
-    ...typography.bodySmall,
-    color: colors.text.primary,
-    fontWeight: '600',
-  },
-  feedbackTypeButtonTextActive: {
-    color: colors.white,
+  feedbackStarButton: {
+    padding: spacing.xs,
   },
   feedbackInput: {
     ...typography.body,

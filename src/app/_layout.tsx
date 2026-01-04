@@ -7,6 +7,7 @@ import { storage } from '../utils/storage';
 import { authService } from '../services/auth.service';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from '../theme/theme-context';
+import { ToastProvider } from '../utils/toast';
 import OnboardingScreen from './(auth)/onboarding';
 import LoginScreen from './(auth)/login';
 import SignupScreen from './(auth)/signup';
@@ -134,18 +135,20 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
-          <Stack.Navigator 
-            initialRouteName={initialRouteName}
-            screenOptions={{ headerShown: false }}
-          >
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
-            <Stack.Screen name="Tabs" component={TabsNavigator} />
-          </Stack.Navigator>
-        </NavigationContainer>
+        <ToastProvider>
+          <NavigationContainer>
+            <Stack.Navigator 
+              initialRouteName={initialRouteName}
+              screenOptions={{ headerShown: false }}
+            >
+              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+              <Stack.Screen name="Login" component={LoginScreen} />
+              <Stack.Screen name="Signup" component={SignupScreen} />
+              <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+              <Stack.Screen name="Tabs" component={TabsNavigator} />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </ToastProvider>
       </QueryClientProvider>
     </ThemeProvider>
   );

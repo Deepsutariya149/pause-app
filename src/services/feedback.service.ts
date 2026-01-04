@@ -3,9 +3,8 @@ import { api } from './api';
 export interface Feedback {
   _id: string;
   userId: string;
+  rating: number; // Rating from 1 to 5
   message: string;
-  email?: string;
-  type: 'bug' | 'feature' | 'improvement' | 'other';
   isRead: boolean;
   isResolved: boolean;
   createdAt: string;
@@ -14,7 +13,7 @@ export interface Feedback {
 
 export const feedbackService = {
   // Submit feedback
-  async submitFeedback(data: { message: string; email?: string; type?: string }): Promise<Feedback> {
+  async submitFeedback(data: { rating: number; message: string }): Promise<Feedback> {
     return await api.post<Feedback>('/feedback', data);
   },
 
@@ -23,5 +22,6 @@ export const feedbackService = {
     return await api.get<Feedback[]>('/feedback/my-feedback');
   },
 };
+
 
 

@@ -10,7 +10,7 @@ export const useFeedback = () => {
   });
 
   const submitMutation = useMutation({
-    mutationFn: (data: { message: string; email?: string; type?: string }) =>
+    mutationFn: (data: { rating: number; message: string }) =>
       feedbackService.submitFeedback(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myFeedback'] });
@@ -24,5 +24,6 @@ export const useFeedback = () => {
     isSubmitting: submitMutation.isPending,
   };
 };
+
 
 
